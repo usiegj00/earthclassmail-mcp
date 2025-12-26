@@ -164,6 +164,17 @@ class EarthClassMailClient {
       method: "POST",
     });
   }
+
+  async fetchMediaContent(url: string): Promise<{ data: string; contentType: string }> {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch media: ${response.status}`);
+    }
+    const buffer = await response.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString("base64");
+    const contentType = response.headers.get("content-type") || "application/octet-stream";
+    return { data: base64, contentType };
+  }
 }
 
 const TOOLS: Tool[] = [
@@ -284,6 +295,29 @@ const TOOLS: Tool[] = [
       required: ["inbox_id", "piece_id", "action"],
     },
   },
+  {
+    name: "ecm_get_piece_content",
+    description: "Get the scanned content (PDF or images) of a mail piece. Returns the actual file content as base64. The piece must have been scanned first.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        inbox_id: {
+          type: "number",
+          description: "The inbox ID",
+        },
+        piece_id: {
+          type: "number",
+          description: "The piece ID to get content for",
+        },
+        content_type: {
+          type: "string",
+          description: "Filter by content type: 'pdf' for scanned documents, 'image' for envelope/page images, 'all' for everything (default: 'pdf')",
+          enum: ["pdf", "image", "all"],
+        },
+      },
+      required: ["inbox_id", "piece_id"],
+    },
+  },
 ];
 
 async function main() {
@@ -300,7 +334,7 @@ async function main() {
   const server = new Server(
     {
       name: "earthclassmail-mcp",
-      version: "1.0.3",
+      version: "1.0.5",
     },
     {
       capabilities: {
@@ -444,6 +478,73 @@ async function main() {
               },
             ],
           };
+        }
+
+        case "ecm_get_piece_content": {
+          const piece = await client.getPiece(
+            args?.inbox_id as number,
+            args?.piece_id as number
+          );
+
+          if (!piece.media || piece.media.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: "No media content available for this piece. It may not have been scanned yet. Use ecm_perform_action with action='scan' to request a scan.",
+                },
+              ],
+            };
+          }
+
+          const contentTypeFilter = (args?.content_type as string) || "pdf";
+          let filteredMedia = piece.media;
+
+          if (contentTypeFilter === "pdf") {
+            filteredMedia = piece.media.filter(m => m.content_type === "application/pdf");
+          } else if (contentTypeFilter === "image") {
+            filteredMedia = piece.media.filter(m => m.content_type.startsWith("image/"));
+          }
+
+          if (filteredMedia.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `No ${contentTypeFilter} content found. Available types: ${piece.media.map(m => m.content_type).join(", ")}`,
+                },
+              ],
+            };
+          }
+
+          const contentItems: Array<{ type: "text" | "image"; text?: string; data?: string; mimeType?: string }> = [];
+
+          for (const media of filteredMedia) {
+            try {
+              const { data, contentType } = await client.fetchMediaContent(media.url);
+
+              if (contentType.startsWith("image/")) {
+                contentItems.push({
+                  type: "image" as const,
+                  data,
+                  mimeType: contentType,
+                });
+              } else {
+                // For PDFs and other files, return as text with base64 data
+                contentItems.push({
+                  type: "text" as const,
+                  text: `[${contentType}] (${media.tags.join(", ")})\nBase64 content (${Math.round(data.length / 1024)}KB):\n${data}`,
+                });
+              }
+            } catch (err) {
+              contentItems.push({
+                type: "text" as const,
+                text: `Failed to fetch ${media.content_type}: ${err instanceof Error ? err.message : String(err)}`,
+              });
+            }
+          }
+
+          return { content: contentItems };
         }
 
         default:

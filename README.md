@@ -33,6 +33,7 @@ Get your API key from Earth Class Mail: **Settings → Integrations → Generate
 | `ecm_get_piece` | Get details + scanned content for a piece |
 | `ecm_list_recipients` | List names on a mailbox |
 | `ecm_perform_action` | Scan, shred, ship, archive, etc. |
+| `ecm_get_piece_content` | Get scanned PDF/image content |
 
 ## Manual Installation
 

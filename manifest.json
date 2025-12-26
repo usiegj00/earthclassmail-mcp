@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "earthclassmail",
   "display_name": "Earth Class Mail",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Access your Earth Class Mail virtual mailbox. View mail, request scans, and manage pieces.",
   "author": {
     "name": "Jonathan Siegel"
@@ -41,6 +41,7 @@
     {"name": "ecm_list_pieces", "description": "List mail in an inbox"},
     {"name": "ecm_get_piece", "description": "Get details and scanned content for a piece"},
     {"name": "ecm_list_recipients", "description": "List names on a mailbox"},
-    {"name": "ecm_perform_action", "description": "Scan, shred, ship, archive mail"}
+    {"name": "ecm_perform_action", "description": "Scan, shred, ship, archive mail"},
+    {"name": "ecm_get_piece_content", "description": "Get scanned PDF/image content"}
   ]
 }
