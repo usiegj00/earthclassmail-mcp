@@ -1,0 +1,48 @@
+{
+  "name": "@usiegj00/earthclassmail-mcp",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "MCP server for Earth Class Mail - access your virtual mailbox via Claude",
+  "main": "dist/index.js",
+  "bin": {
+    "earthclassmail-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "earth-class-mail",
+    "earthclassmail",
+    "virtual-mailbox",
+    "claude",
+    "anthropic"
+  ],
+  "author": "Jonathan Siegel",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "manifest.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usiegj00/earthclassmail-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/usiegj00/earthclassmail-mcp/issues"
+  },
+  "homepage": "https://github.com/usiegj00/earthclassmail-mcp#readme"
+}

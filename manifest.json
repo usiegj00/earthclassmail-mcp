@@ -1,0 +1,29 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/npm/@anthropic-ai/claude-code@latest/resources/dxt/manifest.schema.json",
+  "name": "Earth Class Mail",
+  "id": "earthclassmail",
+  "version": "1.0.0",
+  "description": "Access your Earth Class Mail virtual mailbox. View mail, request scans, and manage pieces.",
+  "author": {
+    "name": "Jonathan Siegel"
+  },
+  "repository": "https://github.com/usiegj00/earthclassmail-mcp",
+  "license": "MIT",
+  "server": {
+    "type": "stdio",
+    "command": {
+      "macos": "npx -y @usiegj00/earthclassmail-mcp",
+      "linux": "npx -y @usiegj00/earthclassmail-mcp",
+      "windows": "npx.cmd -y @usiegj00/earthclassmail-mcp"
+    }
+  },
+  "configuration": {
+    "properties": {
+      "EARTHCLASSMAIL_API_KEY": {
+        "type": "string",
+        "description": "Your Earth Class Mail API key. Get it from: Settings → Integrations → Generate Key",
+        "required": true
+      }
+    }
+  }
+}
