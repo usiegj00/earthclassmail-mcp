@@ -157,6 +157,19 @@ class EarthClassMailClient {
     return this.request<MailPiece>(`/pieces/${pieceId}`);
   }
 
+  async getPieceMedia(pieceId: number | string): Promise<ApiResponse<{
+    content_type: string;
+    id: string;
+    tags: string[];
+    url: string;
+    page_count?: number;
+    piece_id: number;
+    scan_id?: number;
+  }>> {
+    // Separate endpoint returns all media including scanned PDFs
+    return this.request(`/pieces/${pieceId}/media`);
+  }
+
   async listRecipients(inboxId: number): Promise<ApiResponse<Recipient>> {
     return this.request<ApiResponse<Recipient>>(`/inboxes/${inboxId}/recipients`);
   }
@@ -308,7 +321,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: "ecm_get_piece_content",
-    description: "Get content from a mail piece. NOTE: ECM API only provides envelope images, not scanned document pages. For full scanned content, use OCR text from ecm_get_piece or use send-to-email action.",
+    description: "Get scanned content (PDF or images) from a mail piece. Returns the scanned PDF document and/or envelope images.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -316,9 +329,10 @@ const TOOLS: Tool[] = [
           type: "number",
           description: "The piece ID to get content for",
         },
-        include_ocr: {
-          type: "boolean",
-          description: "Include OCR text from scanned pages (default: true)",
+        content_type: {
+          type: "string",
+          description: "Filter by type: 'pdf' for scanned document, 'image' for envelope images, 'all' for everything (default: 'pdf')",
+          enum: ["pdf", "image", "all"],
         },
       },
       required: ["piece_id"],
@@ -340,7 +354,7 @@ async function main() {
   const server = new Server(
     {
       name: "earthclassmail-mcp",
-      version: "1.0.9",
+      version: "1.0.10",
     },
     {
       capabilities: {
@@ -485,49 +499,64 @@ async function main() {
         }
 
         case "ecm_get_piece_content": {
-          const piece = await client.getPiece(
-            args?.piece_id as number
-          );
+          const mediaResponse = await client.getPieceMedia(args?.piece_id as number);
+          const allMedia = mediaResponse.data || [];
 
-          const contentItems: Array<{ type: "text" | "image"; text?: string; data?: string; mimeType?: string }> = [];
-          const includeOcr = args?.include_ocr !== false;
-
-          // Add info header
-          contentItems.push({
-            type: "text" as const,
-            text: `Mail piece ${piece.id}: ${piece.page_count_actual || 0} scanned pages\nNote: ECM API only provides envelope images. Scanned document pages are only available via OCR text or send-to-email action.`,
-          });
-
-          // Include OCR text if available and requested
-          if (includeOcr && piece.ocr_data) {
-            contentItems.push({
-              type: "text" as const,
-              text: `\n--- OCR Text (${piece.page_count_actual} pages) ---\n${piece.ocr_data}`,
-            });
+          if (allMedia.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: "No media content available for this piece. It may not have been scanned yet. Use ecm_perform_action with action='scan' to request a scan.",
+                },
+              ],
+            };
           }
 
-          // Fetch envelope image if available
-          if (piece.media && piece.media.length > 0) {
-            for (const media of piece.media) {
-              try {
-                const { data, contentType } = await client.fetchMediaContent(media.url);
-                if (contentType.startsWith("image/")) {
-                  contentItems.push({
-                    type: "text" as const,
-                    text: `\n--- Envelope Image (${media.tags.join(", ")}) ---`,
-                  });
-                  contentItems.push({
-                    type: "image" as const,
-                    data,
-                    mimeType: contentType,
-                  });
-                }
-              } catch (err) {
+          const contentTypeFilter = (args?.content_type as string) || "pdf";
+          let filteredMedia = allMedia;
+
+          if (contentTypeFilter === "pdf") {
+            filteredMedia = allMedia.filter(m => m.content_type === "application/pdf");
+          } else if (contentTypeFilter === "image") {
+            filteredMedia = allMedia.filter(m => m.content_type.startsWith("image/"));
+          }
+
+          if (filteredMedia.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `No ${contentTypeFilter} content found. Available: ${allMedia.map(m => `${m.content_type} (${m.tags.join(",")})`).join(", ")}`,
+                },
+              ],
+            };
+          }
+
+          const contentItems: Array<{ type: "text" | "image"; text?: string; data?: string; mimeType?: string }> = [];
+
+          for (const media of filteredMedia) {
+            try {
+              const { data, contentType } = await client.fetchMediaContent(media.url);
+
+              if (contentType.startsWith("image/")) {
+                contentItems.push({
+                  type: "image" as const,
+                  data,
+                  mimeType: contentType,
+                });
+              } else {
+                // For PDFs, return as base64
                 contentItems.push({
                   type: "text" as const,
-                  text: `Failed to fetch envelope image: ${err instanceof Error ? err.message : String(err)}`,
+                  text: `[${contentType}] ${media.page_count || 0} pages (${media.tags.join(", ")})\nBase64 (${Math.round(data.length / 1024)}KB):\n${data}`,
                 });
               }
+            } catch (err) {
+              contentItems.push({
+                type: "text" as const,
+                text: `Failed to fetch ${media.content_type}: ${err instanceof Error ? err.message : String(err)}`,
+              });
             }
           }
 
