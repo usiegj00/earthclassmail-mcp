@@ -1,6 +1,6 @@
 {
   "name": "@usiegj00/earthclassmail-mcp",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "type": "module",
   "description": "MCP server for Earth Class Mail - access your virtual mailbox via Claude",
   "main": "dist/index.js",

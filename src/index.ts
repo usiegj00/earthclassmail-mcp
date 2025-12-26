@@ -151,8 +151,9 @@ class EarthClassMailClient {
     );
   }
 
-  async getPiece(inboxId: number, pieceId: number): Promise<MailPiece> {
-    return this.request<MailPiece>(`/inboxes/${inboxId}/pieces/${pieceId}`);
+  async getPiece(pieceId: number | string): Promise<MailPiece> {
+    // Single piece endpoint doesn't use inbox prefix
+    return this.request<MailPiece>(`/pieces/${pieceId}`);
   }
 
   async listRecipients(inboxId: number): Promise<ApiResponse<Recipient>> {
@@ -242,10 +243,6 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        inbox_id: {
-          type: "number",
-          description: "The inbox ID",
-        },
         piece_id: {
           type: "number",
           description: "The piece ID to retrieve",
@@ -255,7 +252,7 @@ const TOOLS: Tool[] = [
           description: "Include full media URLs (default: false, they are very long). Set to true only if you need to access the scanned images.",
         },
       },
-      required: ["inbox_id", "piece_id"],
+      required: ["piece_id"],
     },
   },
   {
@@ -301,10 +298,6 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        inbox_id: {
-          type: "number",
-          description: "The inbox ID",
-        },
         piece_id: {
           type: "number",
           description: "The piece ID to get content for",
@@ -315,7 +308,7 @@ const TOOLS: Tool[] = [
           enum: ["pdf", "image", "all"],
         },
       },
-      required: ["inbox_id", "piece_id"],
+      required: ["piece_id"],
     },
   },
 ];
@@ -334,7 +327,7 @@ async function main() {
   const server = new Server(
     {
       name: "earthclassmail-mcp",
-      version: "1.0.5",
+      version: "1.0.6",
     },
     {
       capabilities: {
@@ -417,7 +410,6 @@ async function main() {
 
         case "ecm_get_piece": {
           const piece = await client.getPiece(
-            args?.inbox_id as number,
             args?.piece_id as number
           );
 
@@ -482,7 +474,6 @@ async function main() {
 
         case "ecm_get_piece_content": {
           const piece = await client.getPiece(
-            args?.inbox_id as number,
             args?.piece_id as number
           );
 
