@@ -8,10 +8,10 @@ Access your [Earth Class Mail](https://earthclassmail.com) virtual mailbox from 
 
 **Claude Code:**
 ```bash
-claude mcp add earthclassmail -- npx -y @usiegj00/earthclassmail-mcp
+claude mcp add earthclassmail -e EARTHCLASSMAIL_API_KEY=your-key -- npx -y @usiegj00/earthclassmail-mcp
 ```
 
-You'll need your API key from Earth Class Mail: **Settings → Integrations → Generate Key**
+Get your API key from Earth Class Mail: **Settings → Integrations → Generate Key**
 
 ---
 
@@ -57,7 +57,6 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 ### Claude Code
 
 ```bash
-# Add with environment variable
 claude mcp add earthclassmail -e EARTHCLASSMAIL_API_KEY=your-key -- npx -y @usiegj00/earthclassmail-mcp
 ```
 

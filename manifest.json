@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "earthclassmail",
   "display_name": "Earth Class Mail",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Access your Earth Class Mail virtual mailbox. View mail, request scans, and manage pieces.",
   "author": {
     "name": "Jonathan Siegel"
