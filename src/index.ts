@@ -78,6 +78,23 @@ interface User {
   username: string;
 }
 
+// Summarize a mail piece by removing large fields like media URLs
+function summarizePiece(piece: MailPiece): object {
+  return {
+    id: piece.id,
+    received_at: piece.received_at,
+    piece_type: piece.piece_type,
+    piece_sub_type: piece.piece_sub_type,
+    sender: piece.sender?.name || "Unknown",
+    recipient: piece.recipient?.name || "Unknown",
+    attributes: piece.attributes,
+    available_actions: piece.available_actions,
+    page_count: piece.page_count_actual,
+    has_media: (piece.media?.length || 0) > 0,
+    operation_status: piece.operation_status,
+  };
+}
+
 class EarthClassMailClient {
   private apiKey: string;
 
@@ -184,7 +201,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: "ecm_list_pieces",
-    description: "List mail pieces in an inbox. Returns envelope images, sender info, and available actions.",
+    description: "List mail pieces in an inbox. Returns a summary of each piece (use ecm_get_piece for full details including media URLs).",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -198,7 +215,7 @@ const TOOLS: Tool[] = [
         },
         per_page: {
           type: "number",
-          description: "Items per page (default: 20, max: 100)",
+          description: "Items per page (default: 10, max: 50 to avoid token limits)",
         },
         unread_only: {
           type: "boolean",
@@ -221,6 +238,10 @@ const TOOLS: Tool[] = [
         piece_id: {
           type: "number",
           description: "The piece ID to retrieve",
+        },
+        include_media: {
+          type: "boolean",
+          description: "Include full media URLs (default: false, they are very long). Set to true only if you need to access the scanned images.",
         },
       },
       required: ["inbox_id", "piece_id"],
@@ -279,7 +300,7 @@ async function main() {
   const server = new Server(
     {
       name: "earthclassmail-mcp",
-      version: "1.0.0",
+      version: "1.0.2",
     },
     {
       capabilities: {
@@ -334,16 +355,27 @@ async function main() {
         }
 
         case "ecm_list_pieces": {
+          // Cap per_page at 50 to avoid token limits
+          const perPage = Math.min((args?.per_page as number) || 10, 50);
           const pieces = await client.listPieces(args?.inbox_id as number, {
             page: args?.page as number | undefined,
-            per_page: args?.per_page as number | undefined,
+            per_page: perPage,
             unread_only: args?.unread_only as boolean | undefined,
           });
+
+          // Return summarized pieces to reduce token usage
+          const summarized = {
+            current_page: pieces.current_page,
+            last_page: pieces.last_page,
+            total: pieces.total,
+            data: pieces.data?.map(summarizePiece),
+          };
+
           return {
             content: [
               {
                 type: "text" as const,
-                text: JSON.stringify(pieces, null, 2),
+                text: JSON.stringify(summarized, null, 2),
               },
             ],
           };
@@ -354,6 +386,28 @@ async function main() {
             args?.inbox_id as number,
             args?.piece_id as number
           );
+
+          // Optionally strip media URLs (they're very long due to AWS signatures)
+          const includeMedia = args?.include_media as boolean;
+          if (!includeMedia && piece.media) {
+            const result = {
+              ...piece,
+              media: piece.media.map(m => ({
+                content_type: m.content_type,
+                tags: m.tags,
+                url: "[URL available - set include_media=true to see]",
+              })),
+            };
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+
           return {
             content: [
               {
