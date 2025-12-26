@@ -151,8 +151,29 @@ class EarthClassMailClient {
     );
   }
 
-  async getPiece(inboxId: number, pieceId: number): Promise<MailPiece> {
-    return this.request<MailPiece>(`/inboxes/${inboxId}/pieces/${pieceId}`);
+  async getPiece(inboxId: number, pieceId: number): Promise<MailPiece | null> {
+    // Single piece endpoint doesn't work, so fetch from list and filter
+    // Use a large page size to find the piece
+    let page = 1;
+    const maxPages = 20; // Safety limit
+
+    while (page <= maxPages) {
+      const response = await this.request<ApiResponse<MailPiece>>(
+        `/inboxes/${inboxId}/pieces?page=${page}&per_page=100`
+      );
+
+      const piece = response.data?.find(p => p.id === pieceId);
+      if (piece) {
+        return piece;
+      }
+
+      if (!response.last_page || page >= response.last_page) {
+        break;
+      }
+      page++;
+    }
+
+    return null;
   }
 
   async listRecipients(inboxId: number): Promise<ApiResponse<Recipient>> {
@@ -300,7 +321,7 @@ async function main() {
   const server = new Server(
     {
       name: "earthclassmail-mcp",
-      version: "1.0.2",
+      version: "1.0.3",
     },
     {
       capabilities: {
@@ -386,6 +407,18 @@ async function main() {
             args?.inbox_id as number,
             args?.piece_id as number
           );
+
+          if (!piece) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Piece ${args?.piece_id} not found in inbox ${args?.inbox_id}`,
+                },
+              ],
+              isError: true,
+            };
+          }
 
           // Optionally strip media URLs (they're very long due to AWS signatures)
           const includeMedia = args?.include_media as boolean;
