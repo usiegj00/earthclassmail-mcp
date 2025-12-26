@@ -288,7 +288,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: "ecm_perform_action",
-    description: "Perform an action on a mail piece. Available actions vary by piece but include: scan, shred, ship, move-to-trash, move-to-archive, move-to-inbox, send-to-cloud, send-to-email",
+    description: "Perform an action on a mail piece. Working actions: scan, shred, ship, archive. Note: move-to-inbox and some other actions may not be available via API.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -298,8 +298,8 @@ const TOOLS: Tool[] = [
         },
         action: {
           type: "string",
-          description: "The action to perform (check available_actions on the piece)",
-          enum: ["scan", "shred", "ship", "move-to-trash", "move-to-archive", "move-to-inbox", "send-to-cloud", "send-to-email"],
+          description: "The action to perform. Note: not all actions may be available via API.",
+          enum: ["scan", "shred", "ship", "archive"],
         },
       },
       required: ["piece_id", "action"],
@@ -340,7 +340,7 @@ async function main() {
   const server = new Server(
     {
       name: "earthclassmail-mcp",
-      version: "1.0.7",
+      version: "1.0.8",
     },
     {
       capabilities: {
