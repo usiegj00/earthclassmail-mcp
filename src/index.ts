@@ -160,8 +160,25 @@ class EarthClassMailClient {
     return this.request<ApiResponse<Recipient>>(`/inboxes/${inboxId}/recipients`);
   }
 
-  async performAction(inboxId: number, pieceId: number, action: string): Promise<unknown> {
-    return this.request(`/inboxes/${inboxId}/pieces/${pieceId}/actions/${action}`, {
+  async performAction(pieceId: number, action: string): Promise<unknown> {
+    // Map action names to API endpoint format
+    // API uses /pieces/{id}/{action} format with shortened action names
+    const actionMap: Record<string, string> = {
+      "move-to-archive": "archive",
+      "move-to-trash": "trash",
+      "move-to-inbox": "inbox",
+      "send-to-cloud": "cloud",
+      "send-to-email": "email",
+      // These actions use their name directly
+      "scan": "scan",
+      "shred": "shred",
+      "ship": "ship",
+      "archive": "archive",
+      "trash": "trash",
+      "inbox": "inbox",
+    };
+    const endpoint = actionMap[action] || action;
+    return this.request(`/pieces/${pieceId}/${endpoint}`, {
       method: "POST",
     });
   }
@@ -275,10 +292,6 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        inbox_id: {
-          type: "number",
-          description: "The inbox ID",
-        },
         piece_id: {
           type: "number",
           description: "The piece ID to perform action on",
@@ -289,7 +302,7 @@ const TOOLS: Tool[] = [
           enum: ["scan", "shred", "ship", "move-to-trash", "move-to-archive", "move-to-inbox", "send-to-cloud", "send-to-email"],
         },
       },
-      required: ["inbox_id", "piece_id", "action"],
+      required: ["piece_id", "action"],
     },
   },
   {
@@ -327,7 +340,7 @@ async function main() {
   const server = new Server(
     {
       name: "earthclassmail-mcp",
-      version: "1.0.6",
+      version: "1.0.7",
     },
     {
       capabilities: {
@@ -458,7 +471,6 @@ async function main() {
 
         case "ecm_perform_action": {
           const result = await client.performAction(
-            args?.inbox_id as number,
             args?.piece_id as number,
             args?.action as string
           );
