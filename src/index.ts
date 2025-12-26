@@ -57,6 +57,7 @@ interface MailPiece {
   }>;
   operation_status?: string;
   operation_action?: string;
+  ocr_data?: string;
 }
 
 interface Recipient {
@@ -307,7 +308,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: "ecm_get_piece_content",
-    description: "Get the scanned content (PDF or images) of a mail piece. Returns the actual file content as base64. The piece must have been scanned first.",
+    description: "Get content from a mail piece. NOTE: ECM API only provides envelope images, not scanned document pages. For full scanned content, use OCR text from ecm_get_piece or use send-to-email action.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -315,10 +316,9 @@ const TOOLS: Tool[] = [
           type: "number",
           description: "The piece ID to get content for",
         },
-        content_type: {
-          type: "string",
-          description: "Filter by content type: 'pdf' for scanned documents, 'image' for envelope/page images, 'all' for everything (default: 'pdf')",
-          enum: ["pdf", "image", "all"],
+        include_ocr: {
+          type: "boolean",
+          description: "Include OCR text from scanned pages (default: true)",
         },
       },
       required: ["piece_id"],
@@ -340,7 +340,7 @@ async function main() {
   const server = new Server(
     {
       name: "earthclassmail-mcp",
-      version: "1.0.8",
+      version: "1.0.9",
     },
     {
       capabilities: {
@@ -489,61 +489,45 @@ async function main() {
             args?.piece_id as number
           );
 
-          if (!piece.media || piece.media.length === 0) {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: "No media content available for this piece. It may not have been scanned yet. Use ecm_perform_action with action='scan' to request a scan.",
-                },
-              ],
-            };
-          }
-
-          const contentTypeFilter = (args?.content_type as string) || "pdf";
-          let filteredMedia = piece.media;
-
-          if (contentTypeFilter === "pdf") {
-            filteredMedia = piece.media.filter(m => m.content_type === "application/pdf");
-          } else if (contentTypeFilter === "image") {
-            filteredMedia = piece.media.filter(m => m.content_type.startsWith("image/"));
-          }
-
-          if (filteredMedia.length === 0) {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: `No ${contentTypeFilter} content found. Available types: ${piece.media.map(m => m.content_type).join(", ")}`,
-                },
-              ],
-            };
-          }
-
           const contentItems: Array<{ type: "text" | "image"; text?: string; data?: string; mimeType?: string }> = [];
+          const includeOcr = args?.include_ocr !== false;
 
-          for (const media of filteredMedia) {
-            try {
-              const { data, contentType } = await client.fetchMediaContent(media.url);
+          // Add info header
+          contentItems.push({
+            type: "text" as const,
+            text: `Mail piece ${piece.id}: ${piece.page_count_actual || 0} scanned pages\nNote: ECM API only provides envelope images. Scanned document pages are only available via OCR text or send-to-email action.`,
+          });
 
-              if (contentType.startsWith("image/")) {
-                contentItems.push({
-                  type: "image" as const,
-                  data,
-                  mimeType: contentType,
-                });
-              } else {
-                // For PDFs and other files, return as text with base64 data
+          // Include OCR text if available and requested
+          if (includeOcr && piece.ocr_data) {
+            contentItems.push({
+              type: "text" as const,
+              text: `\n--- OCR Text (${piece.page_count_actual} pages) ---\n${piece.ocr_data}`,
+            });
+          }
+
+          // Fetch envelope image if available
+          if (piece.media && piece.media.length > 0) {
+            for (const media of piece.media) {
+              try {
+                const { data, contentType } = await client.fetchMediaContent(media.url);
+                if (contentType.startsWith("image/")) {
+                  contentItems.push({
+                    type: "text" as const,
+                    text: `\n--- Envelope Image (${media.tags.join(", ")}) ---`,
+                  });
+                  contentItems.push({
+                    type: "image" as const,
+                    data,
+                    mimeType: contentType,
+                  });
+                }
+              } catch (err) {
                 contentItems.push({
                   type: "text" as const,
-                  text: `[${contentType}] (${media.tags.join(", ")})\nBase64 content (${Math.round(data.length / 1024)}KB):\n${data}`,
+                  text: `Failed to fetch envelope image: ${err instanceof Error ? err.message : String(err)}`,
                 });
               }
-            } catch (err) {
-              contentItems.push({
-                type: "text" as const,
-                text: `Failed to fetch ${media.content_type}: ${err instanceof Error ? err.message : String(err)}`,
-              });
             }
           }
 
